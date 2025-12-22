@@ -136,7 +136,9 @@ EOF
   echo -e "\e[1;32m[证书] 证书已生成\e[0m"
 
   # ================== 计算 pinSHA256 ==================
-  PINSHA256=$(openssl x509 -in "${FILE_PATH}/cert.pem" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex 2>/dev/null | awk '{print $2}')
+  # ================== 计算 pinSHA256 ==================
+  # Hysteria2 需要整个证书的 SHA256，而不仅仅是公钥
+  PINSHA256=$(openssl x509 -in "${FILE_PATH}/cert.pem" -outform DER 2>/dev/null | openssl dgst -sha256 -hex 2>/dev/null | awk '{print $2}')
   echo -e "\e[1;36m[证书] pinSHA256: ${PINSHA256}\e[0m"
 fi
 
@@ -225,7 +227,9 @@ ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F'"' '{print
 
 # ================== 生成订阅 ==================
 # 重新计算 pinSHA256（如果证书已存在，从现有证书计算；如果刚生成，重新计算）
-PINSHA256=$(openssl x509 -in "${FILE_PATH}/cert.pem" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex 2>/dev/null | awk '{print $2}')
+ # ================== 计算 pinSHA256 ==================
+  # Hysteria2 需要整个证书的 SHA256，而不仅仅是公钥
+  PINSHA256=$(openssl x509 -in "${FILE_PATH}/cert.pem" -outform DER 2>/dev/null | openssl dgst -sha256 -hex 2>/dev/null | awk '{print $2}')
 > "${FILE_PATH}/list.txt"
 [ "$TUIC_PORT" != "" ] && [ "$TUIC_PORT" != "0" ] && echo "tuic://${UUID}:admin@${IP}:${TUIC_PORT}?sni=www.bing.com&alpn=h3&congestion_control=bbr&allowInsecure=1#TUIC-${ISP}" >> "${FILE_PATH}/list.txt"
 [ "$HY2_PORT" != "" ] && [ "$HY2_PORT" != "0" ] && echo "hysteria2://${UUID}@${IP}:${HY2_PORT}/?sni=www.bing.com&pinSHA256=${PINSHA256}&insecure=1#Hysteria2-${ISP}" >> "${FILE_PATH}/list.txt"
