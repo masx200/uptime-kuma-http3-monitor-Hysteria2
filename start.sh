@@ -101,8 +101,12 @@ else
 fi
 
 # ================== 生成证书（自签或固定）==================
-if ! command -v openssl >/dev/null 2>&1; then
-  cat > "${FILE_PATH}/private.key" <<'EOF'
+if [ -f "${FILE_PATH}/private.key" ] && [ -f "${FILE_PATH}/cert.pem" ]; then
+  echo -e "\e[1;33m[证书] 检测到已有证书，复用...\e[0m"
+else
+  echo -e "\e[1;33m[证书] 正在生成证书...\e[0m"
+  if ! command -v openssl >/dev/null 2>&1; then
+    cat > "${FILE_PATH}/private.key" <<'EOF'
 -----BEGIN EC PARAMETERS-----
 BgqghkjOPQQBw==
 -----END EC PARAMETERS-----
@@ -112,7 +116,7 @@ AwEHoUQDQgAE1kHafPj07rJG+HboH2ekAI4r+e6TL38GWASAnngZreoQDF16ARa
 /TsyLyFoPkhTxSbehH/OBEjHtSZGaDhMqQ==
 -----END EC PRIVATE KEY-----
 EOF
-  cat > "${FILE_PATH}/cert.pem" <<'EOF'
+    cat > "${FILE_PATH}/cert.pem" <<'EOF'
 -----BEGIN CERTIFICATE-----
 MIIBejCCASGgAwIBAgIUFWeQL3556PNJLp/veCFxGNj9crkwCgYIKoZIzj0EAwIw
 EzERMA8GA1UEAwwIYmluZy5jb20wHhcNMjUwMTAxMDEwMTAwWhcNMzUwMTAxMDEw
@@ -124,11 +128,13 @@ Af8EBTADAQH/MAoGCCqGSM49BAMCA0cAMEQCIARDAJvg0vd/ytrQVvEcSm6XTlB+
 eQ6OFb9LbLYL9Zi+AiffoMbi4y/0YUQlTtz7as9S8/lciBF5VCUoVIKS+vX2g==
 -----END CERTIFICATE-----
 EOF
-else
-  openssl ecparam -genkey -name prime256v1 -out "${FILE_PATH}/private.key" 2>/dev/null
-  openssl req -new -x509 -days 3650 -key "${FILE_PATH}/private.key" -out "${FILE_PATH}/cert.pem" -subj "/CN=bing.com" 2>/dev/null
+  else
+    openssl ecparam -genkey -name prime256v1 -out "${FILE_PATH}/private.key" 2>/dev/null
+    openssl req -new -x509 -days 3650 -key "${FILE_PATH}/private.key" -out "${FILE_PATH}/cert.pem" -subj "/CN=bing.com" 2>/dev/null
+  fi
+  chmod 600 "${FILE_PATH}/private.key"
+  echo -e "\e[1;32m[证书] 证书已生成\e[0m"
 fi
-chmod 600 "${FILE_PATH}/private.key"
 
 # ================== 生成 config.json ==================
 cat > "${FILE_PATH}/config.json" <<EOF
