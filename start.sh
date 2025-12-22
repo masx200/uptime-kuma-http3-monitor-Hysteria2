@@ -130,10 +130,14 @@ eQ6OFb9LbLYL9Zi+AiffoMbi4y/0YUQlTtz7as9S8/lciBF5VCUoVIKS+vX2g==
 EOF
   else
     openssl ecparam -genkey -name prime256v1 -out "${FILE_PATH}/private.key" 2>/dev/null
-    openssl req -new -x509 -days 3650 -key "${FILE_PATH}/private.key" -out "${FILE_PATH}/cert.pem" -subj "/CN=bing.com" 2>/dev/null
+    openssl req -new -x509 -days 3650 -key "${FILE_PATH}/private.key" -out "${FILE_PATH}/cert.pem" -subj "/CN=www.bing.com" 2>/dev/null
   fi
   chmod 600 "${FILE_PATH}/private.key"
   echo -e "\e[1;32m[证书] 证书已生成\e[0m"
+
+  # ================== 计算 pinSHA256 ==================
+  PINSHA256=$(openssl x509 -in "${FILE_PATH}/cert.pem" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex 2>/dev/null | awk '{print $2}')
+  echo -e "\e[1;36m[证书] pinSHA256: ${PINSHA256}\e[0m"
 fi
 
 # ================== 生成 config.json ==================
@@ -156,7 +160,7 @@ cat > "${FILE_PATH}/config.json" <<EOF
       \"listen\": \"::\",
       \"listen_port\": $HY2_PORT,
       \"users\": [{\"password\": \"$UUID\"}],
-      \"masquerade\": \"https://bing.com\",
+      \"masquerade\": \"https://www.bing.com\",
       \"tls\": {\"enabled\": true, \"alpn\": [\"h3\"], \"certificate_path\": \"${FILE_PATH}/cert.pem\", \"key_path\": \"${FILE_PATH}/private.key\"}
     },"; \
     [ "$REALITY_PORT" != "" ] && [ "$REALITY_PORT" != "0" ] && echo "{
@@ -220,9 +224,11 @@ IP=$(curl -s --max-time 2 ipv4.ip.sb || curl -s --max-time 1 api.ipify.org || ec
 ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F'"' '{print $26"-"$18}' || echo "0.0")
 
 # ================== 生成订阅 ==================
+# 重新计算 pinSHA256（如果证书已存在，从现有证书计算；如果刚生成，重新计算）
+PINSHA256=$(openssl x509 -in "${FILE_PATH}/cert.pem" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex 2>/dev/null | awk '{print $2}')
 > "${FILE_PATH}/list.txt"
 [ "$TUIC_PORT" != "" ] && [ "$TUIC_PORT" != "0" ] && echo "tuic://${UUID}:admin@${IP}:${TUIC_PORT}?sni=www.bing.com&alpn=h3&congestion_control=bbr&allowInsecure=1#TUIC-${ISP}" >> "${FILE_PATH}/list.txt"
-[ "$HY2_PORT" != "" ] && [ "$HY2_PORT" != "0" ] && echo "hysteria2://${UUID}@${IP}:${HY2_PORT}/?sni=www.bing.com&pinSHA256=e700704ec8b116706e1d75a7df535de701317ad4f53347754b6bf4efc918915f&insecure=1#Hysteria2-${ISP}" >> "${FILE_PATH}/list.txt"
+[ "$HY2_PORT" != "" ] && [ "$HY2_PORT" != "0" ] && echo "hysteria2://${UUID}@${IP}:${HY2_PORT}/?sni=www.bing.com&pinSHA256=${PINSHA256}&insecure=1#Hysteria2-${ISP}" >> "${FILE_PATH}/list.txt"
 [ "$REALITY_PORT" != "" ] && [ "$REALITY_PORT" != "0" ] && echo "vless://${UUID}@${IP}:${REALITY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.nazhumi.com&fp=firefox&pbk=${public_key}&type=tcp#Reality-${ISP}" >> "${FILE_PATH}/list.txt"
 
 base64 "${FILE_PATH}/list.txt" | tr -d '\n' > "${FILE_PATH}/sub.txt"

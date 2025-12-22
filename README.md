@@ -193,7 +193,7 @@ ps aux | grep sing-box
   "masquerade": {
     "type": "proxy",
     "proxy": {
-      "url": "https://bing.com"
+      "url": "https://www.bing.com"
     }
   }
 }
@@ -208,11 +208,11 @@ ps aux | grep sing-box
   "listen_port": 443,
   "tls": {
     "enabled": true,
-    "server_name": "bing.com",
+    "server_name": "www.bing.com",
     "reality": {
       "enabled": true,
       "handshake": {
-        "server": "bing.com",
+        "server": "www.bing.com",
         "server_port": 443
       }
     }
@@ -331,7 +331,7 @@ UUID: [从 .npm/uuid.txt 获取]
 TLS: 开启
 Reality: 开启
 公钥: [从 .npm/key.txt 获取]
-域名: bing.com
+域名: www.bing.com
 ```
 
 **Hysteria2**

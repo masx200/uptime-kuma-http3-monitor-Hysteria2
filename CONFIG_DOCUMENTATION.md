@@ -49,7 +49,7 @@ Hysteria2、VLESS (Reality) 协议，并提供灵活的流量路由功能。
       "password": "4519a3fa-b2f4-4edc-9fa2-7f9433110665"
     }
   ],
-  "masquerade": "https://bing.com",
+  "masquerade": "https://www.bing.com",
   "tls": {
     "enabled": true,
     "alpn": ["h3"],

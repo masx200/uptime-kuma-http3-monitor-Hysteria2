@@ -129,7 +129,7 @@ go run h3_fingerprint.go
 ### Certificate Management
 
 - Self-signed certificates hardcoded for systems without OpenSSL
-- OpenSSL-generated certificates use "bing.com" as CN
+- OpenSSL-generated certificates use "www.bing.com" as CN
 - Certificates stored with 600 permissions in .npm/ directory
 - SHA256 fingerprint extraction for Hysteria2 pinning
 
