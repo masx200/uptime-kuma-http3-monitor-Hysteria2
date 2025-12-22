@@ -38,6 +38,12 @@
 - **权限控制** - 敏感文件使用 600 权限保护
 - **进程管理** - 完善的 PID 跟踪和平滑重启
 
+### 🌍 IPv6 支持
+
+- **Cloudflare WARP 集成** - 通过 masque-plus 代理转发到 Cloudflare WARP
+- **IPv4 到 IPv6 转换** - 解决 VPS 缺少 IPv6 地址的问题
+- **自动路由配置** - 智能路由 IPv6 流量通过 WARP 网络
+
 ### 📊 订阅生成
 
 - **客户端配置** - 自动生成各协议客户端配置 URL
@@ -113,7 +119,7 @@ export TUIC_PORT=10000
 singbox-nodejs/
 ├── index.js              # 主程序入口
 ├── package.json          # 项目配置
-├── warp.sh              # WARP 代理工具
+├── warp.sh              # WARP 代理工具下载和配置
 ├── start.sh             # 主服务配置脚本
 ├── h3_fingerprint.go    # HTTP/3 证书指纹工具
 ├── go.mod               # Go 模块依赖
@@ -213,6 +219,91 @@ ps aux | grep sing-box
   }
 }
 ```
+
+---
+
+## 🌐 IPv6 解决方案
+
+### 问题背景
+
+许多 VPS 提供商不提供 IPv6 地址，或者 IPv6 网络不稳定，这限制了对 IPv6-only 服务的访问能力。
+
+### 解决方案架构
+
+本服务通过集成 **Cloudflare WARP** 代理来解决 IPv6 连接问题：
+
+```mermaid
+graph LR
+    A[客户端] --> B[IPv4 VPS]
+    B --> C[sing-box 代理]
+    C --> D[masque-plus]
+    D --> E[Cloudflare WARP]
+    E --> F[IPv6 目标服务]
+
+    style A fill:#e1f5fe
+    style B fill:#fff3e0
+    style C fill:#f3e5f5
+    style D fill:#e8f5e8
+    style E fill:#fff8e1
+    style F fill:#fce4ec
+```
+
+### WARP 代理工作原理
+
+1. **masque-plus 工具**: 作为 Masque 协议客户端，建立到 Cloudflare WARP 的代理连接
+2. **流量路由**: IPv6 流量自动通过 WARP 网络转发，无需本地 IPv6 地址
+3. **协议兼容**: 支持所有主流代理协议（TUIC、Hysteria2、Reality）
+
+### WARP 配置详情
+
+**连接参数**:
+- **目标服务器**: `162.159.198.2:443` (Cloudflare WARP)
+- **协议**: Masque over HTTP/3
+- **认证**: 内置 WARP 凭据
+- **重连机制**: 自动重连和故障恢复
+
+```bash
+# WARP 代理自动启动流程
+npm start
+# ↓
+index.js 启动
+# ↓
+执行 warp.sh
+# ↓
+下载 masque-plus 和 usque
+# ↓
+连接到 Cloudflare WARP (162.159.198.2:443)
+# ↓
+启动 sing-box 多协议服务
+```
+
+### IPv6 访问测试
+
+```bash
+# 测试 IPv6 连接
+curl -6 https://ipv6.google.com
+
+# 测试通过代理的 IPv6 连接
+curl -6 --proxy socks5://127.0.0.1:20143 https://ipv6.google.com
+
+# 查看 WARP 连接状态
+ps aux | grep masque-plus
+```
+
+### 优势特性
+
+- ✅ **无需 IPv6 地址**: 仅需 IPv4 VPS 即可访问 IPv6 服务
+- ✅ **高性能**: 基于 HTTP/3 和 QUIC 协议，低延迟高吞吐
+- ✅ **稳定性**: Cloudflare 全球网络，自动故障转移
+- ✅ **安全性**: WARP 提供加密传输和隐私保护
+- ✅ **易用性**: 无需手动配置，开箱即用
+
+### 使用场景
+
+1. **访问 IPv6-only 网站**: 无需本地 IPv6 支持
+2. **绕过 IPv4 限制**: 通过 IPv6 网络访问受限内容
+3. **改善连接质量**: 利用 Cloudflare 优化网络路径
+4. **备用网络通道**: IPv6 连接故障时的备选方案
 
 ---
 
@@ -348,6 +439,8 @@ journalctl -u your-service-name -f
 - 使用 CDN 加速二进制文件下载
 - 启用 BBR 拥塞控制算法
 - 配置合适的 MTU 值
+- **IPv6 加速**: 通过 Cloudflare WARP 优化 IPv6 连接路径
+- **智能路由**: 自动选择最优网络出口减少延迟
 
 ### 安全加固
 
@@ -383,7 +476,8 @@ chown -R singbox:singbox .npm/
 ## 🙏 致谢
 
 - [sing-box](https://github.com/SagerNet/sing-box) - 通用代理平台
-- [Cloudflare WARP](https://cloudflarewarp.com/) - 安全网络连接
+- [Cloudflare WARP](https://cloudflarewarp.com/) - 安全网络连接和 IPv6 代理支持
+- [masque-plus](https://github.com/masx200/masque-plus) - Masque 协议客户端实现
 - [Node.js](https://nodejs.org/) - JavaScript 运行时
 
 ---
