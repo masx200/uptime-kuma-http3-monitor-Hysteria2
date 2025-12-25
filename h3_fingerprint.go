@@ -28,6 +28,7 @@ type EndpointConfig struct {
 	TargetURL        string
 	SNI              string
 	Host             string
+	Method           string
 	PushToken        string
 	KumaURL          string
 	Fingerprint      string
@@ -103,7 +104,7 @@ func main() {
 
 // Parse command-line flags
 func parseFlags() (*Config, error) {
-	var targets, snis, hosts, pushTokens, fingerprints []string
+	var targets, snis, hosts, methods, pushTokens, fingerprints []string
 	var expectedStatusList []int
 	var kumaURL, intervalStr, timeoutStr string
 	var fingerprintOnly bool
@@ -118,6 +119,15 @@ func parseFlags() (*Config, error) {
 	})
 	flag.Func("host", "HTTP Host header (can be specified multiple times)", func(val string) error {
 		hosts = append(hosts, val)
+		return nil
+	})
+	flag.Func("method", "HTTP method (GET, POST, HEAD, etc.) - default is HEAD", func(val string) error {
+		method := strings.ToUpper(val)
+		validMethods := map[string]bool{"GET": true, "POST": true, "HEAD": true, "PUT": true, "DELETE": true, "OPTIONS": true, "PATCH": true}
+		if !validMethods[method] {
+			return fmt.Errorf("invalid HTTP method: %s (must be one of: GET, POST, HEAD, PUT, DELETE, OPTIONS, PATCH)", val)
+		}
+		methods = append(methods, method)
 		return nil
 	})
 	flag.Func("push-token", "Uptime Kuma push token (can be specified multiple times)", func(val string) error {
@@ -151,10 +161,10 @@ func parseFlags() (*Config, error) {
 		fmt.Fprintf(flag.CommandLine.Output(), "\nExamples:\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  # Single endpoint with all validations\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  %s --target https://example.com:443 --sni example.com --host example.com \\\n", os.Args[0])
-		fmt.Fprintf(flag.CommandLine.Output(), "     --fingerprint abc123... --expected-status 200 --push-token TOKEN123\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "\n  # Multiple endpoints\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  %s --target https://ep1.com:443 --sni ep1.com --host ep1.com --expected-status 200 --push-token TOKEN1 \\\n", os.Args[0])
-		fmt.Fprintf(flag.CommandLine.Output(), "     --target https://ep2.com:443 --sni ep2.com --host ep2.com --expected-status 204 --push-token TOKEN2\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "     --method GET --fingerprint abc123... --expected-status 200 --push-token TOKEN123\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "\n  # Multiple endpoints with different methods\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  %s --target https://ep1.com:443 --sni ep1.com --method GET --expected-status 200 --push-token TOKEN1 \\\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "     --target https://ep2.com:443 --sni ep2.com --method POST --expected-status 204 --push-token TOKEN2\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "\n  # Fingerprint only (backward compatible)\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  %s --fingerprint-only --target https://example.com:443 --sni example.com\n", os.Args[0])
 	}
@@ -181,6 +191,12 @@ func parseFlags() (*Config, error) {
 		}
 		if i < len(hosts) {
 			endpoints[i].Host = hosts[i]
+		}
+		if i < len(methods) {
+			endpoints[i].Method = methods[i]
+		} else {
+			// Default to HEAD if not specified
+			endpoints[i].Method = "HEAD"
 		}
 		if i < len(fingerprints) {
 			endpoints[i].Fingerprint = fingerprints[i]
@@ -241,6 +257,7 @@ func runFingerprintOnly(config *Config) {
 
 	logInfo("Starting HTTP/3 connection test")
 	logInfo("Target URL: %s", endpoint.TargetURL)
+	logInfo("HTTP Method: %s", endpoint.Method)
 	logInfo("SNI: %s", endpoint.SNI)
 	if endpoint.Host != "" {
 		logInfo("Host header: %s", endpoint.Host)
@@ -253,7 +270,7 @@ func runFingerprintOnly(config *Config) {
 	}
 	logInfo("Timeout: %s", config.Timeout)
 
-	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Fingerprint, endpoint.ExpectedStatus, config.Timeout)
+	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Method, endpoint.Fingerprint, endpoint.ExpectedStatus, config.Timeout)
 	if err != nil {
 		logError("Check failed: %v", err)
 		log.Fatalf("连接失败: %s", result.ErrorMsg)
@@ -305,11 +322,12 @@ func runFingerprintOnly(config *Config) {
 }
 
 // Check HTTP/3 endpoint
-func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus int, timeout time.Duration) (*CheckResult, error) {
+func CheckHTTP3(target, sni, host, method, expectedFingerprint string, expectedStatus int, timeout time.Duration) (*CheckResult, error) {
 	startTime := time.Now()
 
 	logInfo("Initializing HTTP/3 connection to %s", target)
-	logInfo("TLS Configuration:")
+	logInfo("HTTP Configuration:")
+	logInfo("  - Method: %s", method)
 	logInfo("  - SNI: %s", sni)
 	logInfo("  - InsecureSkipVerify: true")
 	if host != "" {
@@ -336,10 +354,10 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 		Transport: roundTripper,
 	}
 
-	logInfo("Creating HTTP HEAD request...")
+	logInfo("Creating HTTP %s request...", method)
 
-	// Create HEAD request
-	req, err := http.NewRequestWithContext(ctx, "HEAD", target, nil)
+	// Create HTTP request with specified method
+	req, err := http.NewRequestWithContext(ctx, method, target, nil)
 	if err != nil {
 		logError("Failed to create HTTP request: %v", err)
 		return &CheckResult{
@@ -355,7 +373,7 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 		logInfo("Setting Host header: %s", host)
 	}
 
-	logInfo("Sending HTTP/3 request...")
+	logInfo("Sending HTTP/3 %s request...", method)
 
 	// Execute request
 	resp, err := client.Do(req)
@@ -623,6 +641,7 @@ func checkAndPush(endpoint EndpointConfig, timeout time.Duration) {
 	logInfo("---------- Starting check for %s ----------", endpoint.Name)
 	logInfo("Configuration:")
 	logInfo("  - Target: %s", endpoint.TargetURL)
+	logInfo("  - Method: %s", endpoint.Method)
 	logInfo("  - SNI: %s", endpoint.SNI)
 	if endpoint.Host != "" {
 		logInfo("  - Host: %s", endpoint.Host)
@@ -634,7 +653,7 @@ func checkAndPush(endpoint EndpointConfig, timeout time.Duration) {
 		logInfo("  - Expected status: %d", endpoint.ExpectedStatus)
 	}
 
-	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Fingerprint, endpoint.ExpectedStatus, timeout)
+	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Method, endpoint.Fingerprint, endpoint.ExpectedStatus, timeout)
 
 	if err != nil && !result.Success {
 		// Check failed
