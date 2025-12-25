@@ -3,3 +3,4 @@ node_modules
 .claude/settings.local.json
 h3_monitor.exe
 *.log
+server.log

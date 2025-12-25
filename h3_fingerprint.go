@@ -24,11 +24,13 @@ import (
 
 // Configuration structures
 type EndpointConfig struct {
-	Name      string
-	TargetURL string
-	SNI       string
-	PushToken string
-	KumaURL   string
+	Name        string
+	TargetURL   string
+	SNI         string
+	Host        string
+	PushToken   string
+	KumaURL     string
+	Fingerprint string
 }
 
 type Config struct {
@@ -41,10 +43,12 @@ type Config struct {
 
 // Check result structure
 type CheckResult struct {
-	Success         bool
-	ResponseTime    time.Duration
-	CertFingerprint string
-	ErrorMsg        string
+	Success          bool
+	ResponseTime     time.Duration
+	CertFingerprint  string
+	ExpectedFingerprint string
+	HTTPStatusCode   int
+	ErrorMsg         string
 }
 
 // Uptime Kuma push response
@@ -97,7 +101,7 @@ func main() {
 
 // Parse command-line flags
 func parseFlags() (*Config, error) {
-	var targets, snis, pushTokens []string
+	var targets, snis, hosts, pushTokens, fingerprints []string
 	var kumaURL, intervalStr, timeoutStr string
 	var fingerprintOnly bool
 
@@ -109,8 +113,16 @@ func parseFlags() (*Config, error) {
 		snis = append(snis, val)
 		return nil
 	})
+	flag.Func("host", "HTTP Host header (can be specified multiple times)", func(val string) error {
+		hosts = append(hosts, val)
+		return nil
+	})
 	flag.Func("push-token", "Uptime Kuma push token (can be specified multiple times)", func(val string) error {
 		pushTokens = append(pushTokens, val)
+		return nil
+	})
+	flag.Func("fingerprint", "Expected TLS certificate SHA256 fingerprint (must match exactly)", func(val string) error {
+		fingerprints = append(fingerprints, val)
 		return nil
 	})
 
@@ -125,11 +137,12 @@ func parseFlags() (*Config, error) {
 		fmt.Fprintf(flag.CommandLine.Output(), "Options:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(flag.CommandLine.Output(), "\nExamples:\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  # Single endpoint\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  %s --target https://example.com:443 --sni example.com --push-token TOKEN123\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "  # Single endpoint with fingerprint validation\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  %s --target https://example.com:443 --sni example.com --host example.com \\\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "     --fingerprint abc123... --push-token TOKEN123\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "\n  # Multiple endpoints\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  %s --target https://ep1.com:443 --sni ep1.com --push-token TOKEN1 \\\n", os.Args[0])
-		fmt.Fprintf(flag.CommandLine.Output(), "     --target https://ep2.com:443 --sni ep2.com --push-token TOKEN2\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  %s --target https://ep1.com:443 --sni ep1.com --host ep1.com --push-token TOKEN1 \\\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "     --target https://ep2.com:443 --sni ep2.com --host ep2.com --push-token TOKEN2\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "\n  # Fingerprint only (backward compatible)\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  %s --fingerprint-only --target https://example.com:443 --sni example.com\n", os.Args[0])
 	}
@@ -153,6 +166,12 @@ func parseFlags() (*Config, error) {
 		endpoints[i].TargetURL = targets[i]
 		if i < len(snis) {
 			endpoints[i].SNI = snis[i]
+		}
+		if i < len(hosts) {
+			endpoints[i].Host = hosts[i]
+		}
+		if i < len(fingerprints) {
+			endpoints[i].Fingerprint = fingerprints[i]
 		}
 		if i < len(pushTokens) {
 			endpoints[i].PushToken = pushTokens[i]
@@ -202,23 +221,34 @@ func runFingerprintOnly(config *Config) {
 		log.Fatal("Error: --sni is required")
 	}
 
-	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, config.Timeout)
+	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Fingerprint, config.Timeout)
 	if err != nil {
 		log.Fatalf("Check failed: %v", err)
 	}
 
 	if !result.Success {
-		log.Fatalf("Connection failed: %s", result.ErrorMsg)
+		log.Fatalf("连接失败: %s", result.ErrorMsg)
 	}
 
-	// Print in original format
+	// Print result
 	fmt.Println("连接成功！")
-	fmt.Printf("服务器证书通用名称: %s\n", result.CertFingerprint)
-	fmt.Printf("证书 SHA256 指纹: %x\n", result.CertFingerprint)
+	fmt.Printf("HTTP 状态码: %d\n", result.HTTPStatusCode)
+	fmt.Printf("证书 SHA256 指纹: %s\n", result.CertFingerprint)
+
+	if endpoint.Fingerprint != "" {
+		if result.ExpectedFingerprint == result.CertFingerprint {
+			fmt.Println("证书指纹验证: 成功 ✓")
+		} else {
+			fmt.Printf("证书指纹验证: 失败 ✗\n")
+			fmt.Printf("  期望: %s\n", endpoint.Fingerprint)
+			fmt.Printf("  实际: %s\n", result.CertFingerprint)
+			os.Exit(1)
+		}
+	}
 }
 
 // Check HTTP/3 endpoint
-func CheckHTTP3(target, sni string, timeout time.Duration) (*CheckResult, error) {
+func CheckHTTP3(target, sni, host, expectedFingerprint string, timeout time.Duration) (*CheckResult, error) {
 	startTime := time.Now()
 
 	// Create context with timeout
@@ -248,6 +278,11 @@ func CheckHTTP3(target, sni string, timeout time.Duration) (*CheckResult, error)
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("request creation failed: %v", err),
 		}, err
+	}
+
+	// Set Host header if provided
+	if host != "" {
+		req.Host = host
 	}
 
 	// Execute request
@@ -284,12 +319,33 @@ func CheckHTTP3(target, sni string, timeout time.Duration) (*CheckResult, error)
 
 	// Calculate certificate fingerprint
 	var fingerprint [32]byte = sha256.Sum256(serverCert.Raw)
+	fingerprintStr := fmt.Sprintf("%x", fingerprint)
+
+	// Validate fingerprint if provided
+	if expectedFingerprint != "" {
+		// Normalize both fingerprints for comparison (remove any whitespace/colons)
+		expectedNormalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(expectedFingerprint, ":", ""), " ", ""))
+		actualNormalized := strings.ToLower(strings.ReplaceAll(fingerprintStr, " ", ""))
+
+		if expectedNormalized != actualNormalized {
+			return &CheckResult{
+				Success:           false,
+				ResponseTime:      responseTime,
+				CertFingerprint:   fingerprintStr,
+				ExpectedFingerprint: expectedFingerprint,
+				HTTPStatusCode:    resp.StatusCode,
+				ErrorMsg:          fmt.Sprintf("certificate fingerprint mismatch: expected %s, got %s", expectedFingerprint, fingerprintStr),
+			}, fmt.Errorf("fingerprint mismatch")
+		}
+	}
 
 	return &CheckResult{
-		Success:         true,
-		ResponseTime:    responseTime,
-		CertFingerprint: fmt.Sprintf("%x", fingerprint),
-		ErrorMsg:        "OK",
+		Success:           true,
+		ResponseTime:      responseTime,
+		CertFingerprint:   fingerprintStr,
+		ExpectedFingerprint: expectedFingerprint,
+		HTTPStatusCode:    resp.StatusCode,
+		ErrorMsg:          "OK",
 	}, nil
 }
 
@@ -430,7 +486,7 @@ func monitorEndpoint(endpoint EndpointConfig, interval, timeout time.Duration, s
 func checkAndPush(endpoint EndpointConfig, timeout time.Duration) {
 	atomic.AddInt64(&checkCount, 1)
 
-	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, timeout)
+	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Fingerprint, timeout)
 
 	if err != nil && !result.Success {
 		// Check failed
@@ -438,8 +494,8 @@ func checkAndPush(endpoint EndpointConfig, timeout time.Duration) {
 		logError("endpoint=%s status=down msg=\"%s\"", endpoint.Name, result.ErrorMsg)
 	} else if result.Success {
 		atomic.AddInt64(&successCount, 1)
-		logInfo("endpoint=%s status=up ping=%dms msg=OK",
-			endpoint.Name, result.ResponseTime.Milliseconds())
+		logInfo("endpoint=%s status=up ping=%dms http_status=%d msg=OK",
+			endpoint.Name, result.ResponseTime.Milliseconds(), result.HTTPStatusCode)
 	}
 
 	// Push to Uptime Kuma (with retry)
