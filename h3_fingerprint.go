@@ -239,25 +239,45 @@ func runFingerprintOnly(config *Config) {
 		log.Fatal("Error: --sni is required")
 	}
 
+	logInfo("Starting HTTP/3 connection test")
+	logInfo("Target URL: %s", endpoint.TargetURL)
+	logInfo("SNI: %s", endpoint.SNI)
+	if endpoint.Host != "" {
+		logInfo("Host header: %s", endpoint.Host)
+	}
+	if endpoint.Fingerprint != "" {
+		logInfo("Expected fingerprint: %s", endpoint.Fingerprint)
+	}
+	if endpoint.ExpectedStatus > 0 {
+		logInfo("Expected HTTP status: %d", endpoint.ExpectedStatus)
+	}
+	logInfo("Timeout: %s", config.Timeout)
+
 	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Fingerprint, endpoint.ExpectedStatus, config.Timeout)
 	if err != nil {
-		log.Fatalf("Check failed: %v", err)
+		logError("Check failed: %v", err)
+		log.Fatalf("连接失败: %s", result.ErrorMsg)
 	}
 
 	if !result.Success {
+		logError("Connection failed: %s", result.ErrorMsg)
 		log.Fatalf("连接失败: %s", result.ErrorMsg)
 	}
 
 	// Print result
-	fmt.Println("连接成功！")
+	fmt.Println("\n========== 连接成功！==========")
+	fmt.Printf("响应时间: %d ms\n", result.ResponseTime.Milliseconds())
 	fmt.Printf("HTTP 状态码: %d\n", result.HTTPStatusCode)
 	fmt.Printf("证书 SHA256 指纹: %s\n", result.CertFingerprint)
 
 	// Validate fingerprint if provided
 	if endpoint.Fingerprint != "" {
+		fmt.Println("\n---------- 证书指纹验证 ----------")
 		if result.ExpectedFingerprint == result.CertFingerprint {
+			logInfo("Certificate fingerprint validation: PASSED")
 			fmt.Println("证书指纹验证: 成功 ✓")
 		} else {
+			logError("Certificate fingerprint validation: FAILED")
 			fmt.Printf("证书指纹验证: 失败 ✗\n")
 			fmt.Printf("  期望: %s\n", endpoint.Fingerprint)
 			fmt.Printf("  实际: %s\n", result.CertFingerprint)
@@ -267,20 +287,34 @@ func runFingerprintOnly(config *Config) {
 
 	// Validate HTTP status code
 	if result.ExpectedHTTPStatus > 0 {
+		fmt.Println("\n---------- HTTP 状态码验证 ----------")
 		if result.HTTPStatusCode == result.ExpectedHTTPStatus {
+			logInfo("HTTP status code validation: PASSED (expected: %d, got: %d)", result.ExpectedHTTPStatus, result.HTTPStatusCode)
 			fmt.Printf("HTTP 状态码验证: 成功 ✓ (期望: %d)\n", result.ExpectedHTTPStatus)
 		} else {
+			logError("HTTP status code validation: FAILED (expected: %d, got: %d)", result.ExpectedHTTPStatus, result.HTTPStatusCode)
 			fmt.Printf("HTTP 状态码验证: 失败 ✗\n")
 			fmt.Printf("  期望: %d\n", result.ExpectedHTTPStatus)
 			fmt.Printf("  实际: %d\n", result.HTTPStatusCode)
 			os.Exit(1)
 		}
 	}
+
+	fmt.Println("\n================================")
+	logInfo("All validations passed successfully!")
 }
 
 // Check HTTP/3 endpoint
 func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus int, timeout time.Duration) (*CheckResult, error) {
 	startTime := time.Now()
+
+	logInfo("Initializing HTTP/3 connection to %s", target)
+	logInfo("TLS Configuration:")
+	logInfo("  - SNI: %s", sni)
+	logInfo("  - InsecureSkipVerify: true")
+	if host != "" {
+		logInfo("  - Host header: %s", host)
+	}
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -302,9 +336,12 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 		Transport: roundTripper,
 	}
 
+	logInfo("Creating HTTP HEAD request...")
+
 	// Create HEAD request
 	req, err := http.NewRequestWithContext(ctx, "HEAD", target, nil)
 	if err != nil {
+		logError("Failed to create HTTP request: %v", err)
 		return &CheckResult{
 			Success:            false,
 			ExpectedHTTPStatus: expectedStatus,
@@ -315,11 +352,15 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 	// Set Host header if provided
 	if host != "" {
 		req.Host = host
+		logInfo("Setting Host header: %s", host)
 	}
+
+	logInfo("Sending HTTP/3 request...")
 
 	// Execute request
 	resp, err := client.Do(req)
 	if err != nil {
+		logError("HTTP/3 request failed: %v", err)
 		return &CheckResult{
 			Success:            false,
 			ExpectedHTTPStatus: expectedStatus,
@@ -330,10 +371,12 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 
 	// Calculate response time
 	responseTime := time.Since(startTime)
+	logInfo("Response received in %d ms", responseTime.Milliseconds())
 
 	// Get TLS state
 	tlsState := resp.TLS
 	if tlsState == nil {
+		logError("Unable to retrieve TLS connection state")
 		return &CheckResult{
 			Success:            false,
 			ExpectedHTTPStatus: expectedStatus,
@@ -341,8 +384,13 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 		}, fmt.Errorf("no TLS state")
 	}
 
+	logInfo("TLS connection established successfully")
+	logInfo("TLS Version: %d", tlsState.Version)
+	logInfo("TLS Cipher Suite: %x", tlsState.CipherSuite)
+
 	// Get certificate
 	if len(tlsState.PeerCertificates) == 0 {
+		logError("Server provided no certificates")
 		return &CheckResult{
 			Success:            false,
 			ExpectedHTTPStatus: expectedStatus,
@@ -351,18 +399,30 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 	}
 
 	serverCert := tlsState.PeerCertificates[0]
+	logInfo("Certificate information:")
+	logInfo("  - Subject: %s", serverCert.Subject)
+	logInfo("  - Issuer: %s", serverCert.Issuer)
+	logInfo("  - NotBefore: %s", serverCert.NotBefore.Format(time.RFC3339))
+	logInfo("  - NotAfter: %s", serverCert.NotAfter.Format(time.RFC3339))
 
 	// Calculate certificate fingerprint
 	var fingerprint [32]byte = sha256.Sum256(serverCert.Raw)
 	fingerprintStr := fmt.Sprintf("%x", fingerprint)
 
+	logInfo("Certificate SHA256 fingerprint: %s", fingerprintStr)
+	logInfo("HTTP Status Code: %d", resp.StatusCode)
+
 	// Validate fingerprint if provided
 	if expectedFingerprint != "" {
+		logInfo("Validating certificate fingerprint...")
 		// Normalize both fingerprints for comparison (remove any whitespace/colons)
 		expectedNormalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(expectedFingerprint, ":", ""), " ", ""))
 		actualNormalized := strings.ToLower(strings.ReplaceAll(fingerprintStr, " ", ""))
 
 		if expectedNormalized != actualNormalized {
+			logError("Certificate fingerprint mismatch!")
+			logError("  Expected: %s", expectedFingerprint)
+			logError("  Got: %s", fingerprintStr)
 			return &CheckResult{
 				Success:             false,
 				ResponseTime:        responseTime,
@@ -373,20 +433,30 @@ func CheckHTTP3(target, sni, host, expectedFingerprint string, expectedStatus in
 				ErrorMsg:            fmt.Sprintf("certificate fingerprint mismatch: expected %s, got %s", expectedFingerprint, fingerprintStr),
 			}, fmt.Errorf("fingerprint mismatch")
 		}
+		logInfo("Certificate fingerprint validation: PASSED")
 	}
 
 	// Validate HTTP status code if expected status is set
-	if expectedStatus > 0 && resp.StatusCode != expectedStatus {
-		return &CheckResult{
-			Success:             false,
-			ResponseTime:        responseTime,
-			CertFingerprint:     fingerprintStr,
-			ExpectedFingerprint: expectedFingerprint,
-			HTTPStatusCode:      resp.StatusCode,
-			ExpectedHTTPStatus:  expectedStatus,
-			ErrorMsg:            fmt.Sprintf("HTTP status code mismatch: expected %d, got %d", expectedStatus, resp.StatusCode),
-		}, fmt.Errorf("status code mismatch")
+	if expectedStatus > 0 {
+		logInfo("Validating HTTP status code...")
+		if resp.StatusCode != expectedStatus {
+			logError("HTTP status code mismatch!")
+			logError("  Expected: %d", expectedStatus)
+			logError("  Got: %d", resp.StatusCode)
+			return &CheckResult{
+				Success:             false,
+				ResponseTime:        responseTime,
+				CertFingerprint:     fingerprintStr,
+				ExpectedFingerprint: expectedFingerprint,
+				HTTPStatusCode:      resp.StatusCode,
+				ExpectedHTTPStatus:  expectedStatus,
+				ErrorMsg:            fmt.Sprintf("HTTP status code mismatch: expected %d, got %d", expectedStatus, resp.StatusCode),
+			}, fmt.Errorf("status code mismatch")
+		}
+		logInfo("HTTP status code validation: PASSED (expected %d, got %d)", expectedStatus, resp.StatusCode)
 	}
+
+	logInfo("Connection test completed successfully")
 
 	return &CheckResult{
 		Success:             true,
@@ -421,6 +491,11 @@ func PushStatus(kumaURL, pushToken string, result *CheckResult, endpointName str
 	}
 
 	fullURL := pushURL + "?" + params.Encode()
+	logInfo("Push URL: %s?status=%s&ping=%s&msg=%s",
+		pushURL,
+		params.Get("status"),
+		params.Get("ping"),
+		params.Get("msg"))
 
 	// Create HTTP client with 5-second timeout
 	client := &http.Client{
@@ -430,26 +505,35 @@ func PushStatus(kumaURL, pushToken string, result *CheckResult, endpointName str
 	// Execute push request
 	resp, err := client.Get(fullURL)
 	if err != nil {
+		logError("HTTP request to Uptime Kuma failed: %v", err)
 		return fmt.Errorf("push request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	logInfo("Uptime Kuma response status: %d", resp.StatusCode)
+
 	// Parse response
 	var kumaResp KumaPushResponse
 	if err := json.NewDecoder(resp.Body).Decode(&kumaResp); err != nil {
+		logError("Failed to parse Uptime Kuma response: %v", err)
 		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	logInfo("Uptime Kuma response: ok=%v, msg=%s", kumaResp.OK, kumaResp.Msg)
+
 	if resp.StatusCode == 404 {
+		logError("Push token not found or monitor not active (404)")
 		return fmt.Errorf("push token not found or monitor not active")
 	}
 
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
 		// Server error, will retry
+		logWarn("Uptime Kuma server error: %d", resp.StatusCode)
 		return fmt.Errorf("server error: %d", resp.StatusCode)
 	}
 
 	if !kumaResp.OK {
+		logError("Uptime Kuma rejected push: %s", kumaResp.Msg)
 		return fmt.Errorf("push rejected: %s", kumaResp.Msg)
 	}
 
@@ -536,38 +620,78 @@ func monitorEndpoint(endpoint EndpointConfig, interval, timeout time.Duration, s
 func checkAndPush(endpoint EndpointConfig, timeout time.Duration) {
 	atomic.AddInt64(&checkCount, 1)
 
+	logInfo("---------- Starting check for %s ----------", endpoint.Name)
+	logInfo("Configuration:")
+	logInfo("  - Target: %s", endpoint.TargetURL)
+	logInfo("  - SNI: %s", endpoint.SNI)
+	if endpoint.Host != "" {
+		logInfo("  - Host: %s", endpoint.Host)
+	}
+	if endpoint.Fingerprint != "" {
+		logInfo("  - Expected fingerprint: %s", endpoint.Fingerprint)
+	}
+	if endpoint.ExpectedStatus > 0 {
+		logInfo("  - Expected status: %d", endpoint.ExpectedStatus)
+	}
+
 	result, err := CheckHTTP3(endpoint.TargetURL, endpoint.SNI, endpoint.Host, endpoint.Fingerprint, endpoint.ExpectedStatus, timeout)
 
 	if err != nil && !result.Success {
 		// Check failed
 		atomic.AddInt64(&failCount, 1)
-		logError("endpoint=%s status=down msg=\"%s\"", endpoint.Name, result.ErrorMsg)
+		logError("Check FAILED for %s", endpoint.Name)
+		logError("Error: %s", result.ErrorMsg)
+		logError("Total checks: %d, Success: %d, Failed: %d",
+			atomic.LoadInt64(&checkCount),
+			atomic.LoadInt64(&successCount),
+			atomic.LoadInt64(&failCount))
 	} else if result.Success {
 		atomic.AddInt64(&successCount, 1)
-		logInfo("endpoint=%s status=up ping=%dms http_status=%d msg=OK",
-			endpoint.Name, result.ResponseTime.Milliseconds(), result.HTTPStatusCode)
+		logInfo("Check PASSED for %s", endpoint.Name)
+		logInfo("Response time: %d ms", result.ResponseTime.Milliseconds())
+		logInfo("HTTP status: %d", result.HTTPStatusCode)
+		logInfo("Certificate fingerprint: %s", result.CertFingerprint)
+		logInfo("Total checks: %d, Success: %d, Failed: %d",
+			atomic.LoadInt64(&checkCount),
+			atomic.LoadInt64(&successCount),
+			atomic.LoadInt64(&failCount))
 	}
 
 	// Push to Uptime Kuma (with retry)
+	logInfo("Pushing status to Uptime Kuma...")
+	logInfo("  - Kuma URL: %s", endpoint.KumaURL)
+	logInfo("  - Status: %s", map[bool]string{true: "up", false: "down"}[result.Success])
+	if result.Success {
+		logInfo("  - Ping: %d ms", result.ResponseTime.Milliseconds())
+	} else {
+		logInfo("  - Message: %s", result.ErrorMsg)
+	}
+
 	pushErr := PushStatus(endpoint.KumaURL, endpoint.PushToken, result, endpoint.Name)
 	if pushErr != nil {
 		if strings.Contains(pushErr.Error(), "server error") {
 			// Retry once on 5xx errors
-			logWarn("endpoint=%s push failed (server error), retrying...", endpoint.Name)
+			logWarn("Push failed (server error), retrying in 1 second...")
 			time.Sleep(1 * time.Second)
 			pushErr = PushStatus(endpoint.KumaURL, endpoint.PushToken, result, endpoint.Name)
 			if pushErr != nil {
-				logWarn("endpoint=%s push retry failed: %v", endpoint.Name, pushErr)
+				logError("Push retry failed: %v", pushErr)
 			} else {
-				logInfo("endpoint=%s push succeeded on retry", endpoint.Name)
+				logInfo("Push succeeded on retry")
 			}
 		} else if strings.Contains(pushErr.Error(), "not found") {
-			logError("endpoint=%s push failed: %s. Check push token and monitor activation.",
-				endpoint.Name, pushErr)
+			logError("Push failed: %s", pushErr)
+			logError("Please check:")
+			logError("  1. Push token is correct")
+			logError("  2. Monitor is active in Uptime Kuma")
 		} else {
-			logWarn("endpoint=%s push failed: %v", endpoint.Name, pushErr)
+			logWarn("Push failed: %v", pushErr)
 		}
+	} else {
+		logInfo("Status pushed to Uptime Kuma successfully")
 	}
+
+	logInfo("---------- Check completed for %s ----------\n", endpoint.Name)
 }
 
 // Logging functions
