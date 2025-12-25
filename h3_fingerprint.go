@@ -16,23 +16,21 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-)
 
-import (
 	"github.com/quic-go/quic-go/http3"
 )
 
 // Configuration structures
 type EndpointConfig struct {
-	Name             string
-	TargetURL        string
-	SNI              string
-	Host             string
-	Method           string
-	PushToken        string
-	KumaURL          string
-	Fingerprint      string
-	ExpectedStatus   int
+	Name           string
+	TargetURL      string
+	SNI            string
+	Host           string
+	Method         string
+	PushToken      string
+	KumaURL        string
+	Fingerprint    string
+	ExpectedStatus int
 }
 
 type Config struct {
@@ -282,42 +280,42 @@ func runFingerprintOnly(config *Config) {
 	}
 
 	// Print result
-	fmt.Println("\n========== 连接成功！==========")
-	fmt.Printf("响应时间: %d ms\n", result.ResponseTime.Milliseconds())
-	fmt.Printf("HTTP 状态码: %d\n", result.HTTPStatusCode)
-	fmt.Printf("证书 SHA256 指纹: %s\n", result.CertFingerprint)
+	log.Println("\n========== 连接成功！==========")
+	log.Printf("响应时间: %d ms\n", result.ResponseTime.Milliseconds())
+	log.Printf("HTTP 状态码: %d\n", result.HTTPStatusCode)
+	log.Printf("证书 SHA256 指纹: %s\n", result.CertFingerprint)
 
 	// Validate fingerprint if provided
 	if endpoint.Fingerprint != "" {
-		fmt.Println("\n---------- 证书指纹验证 ----------")
+		log.Println("\n---------- 证书指纹验证 ----------")
 		if result.ExpectedFingerprint == result.CertFingerprint {
 			logInfo("Certificate fingerprint validation: PASSED")
-			fmt.Println("证书指纹验证: 成功 ✓")
+			log.Println("证书指纹验证: 成功 ✓")
 		} else {
 			logError("Certificate fingerprint validation: FAILED")
-			fmt.Printf("证书指纹验证: 失败 ✗\n")
-			fmt.Printf("  期望: %s\n", endpoint.Fingerprint)
-			fmt.Printf("  实际: %s\n", result.CertFingerprint)
+			log.Printf("证书指纹验证: 失败 ✗\n")
+			log.Printf("  期望: %s\n", endpoint.Fingerprint)
+			log.Printf("  实际: %s\n", result.CertFingerprint)
 			os.Exit(1)
 		}
 	}
 
 	// Validate HTTP status code
 	if result.ExpectedHTTPStatus > 0 {
-		fmt.Println("\n---------- HTTP 状态码验证 ----------")
+		log.Println("\n---------- HTTP 状态码验证 ----------")
 		if result.HTTPStatusCode == result.ExpectedHTTPStatus {
 			logInfo("HTTP status code validation: PASSED (expected: %d, got: %d)", result.ExpectedHTTPStatus, result.HTTPStatusCode)
-			fmt.Printf("HTTP 状态码验证: 成功 ✓ (期望: %d)\n", result.ExpectedHTTPStatus)
+			log.Printf("HTTP 状态码验证: 成功 ✓ (期望: %d)\n", result.ExpectedHTTPStatus)
 		} else {
 			logError("HTTP status code validation: FAILED (expected: %d, got: %d)", result.ExpectedHTTPStatus, result.HTTPStatusCode)
-			fmt.Printf("HTTP 状态码验证: 失败 ✗\n")
-			fmt.Printf("  期望: %d\n", result.ExpectedHTTPStatus)
-			fmt.Printf("  实际: %d\n", result.HTTPStatusCode)
+			log.Printf("HTTP 状态码验证: 失败 ✗\n")
+			log.Printf("  期望: %d\n", result.ExpectedHTTPStatus)
+			log.Printf("  实际: %d\n", result.HTTPStatusCode)
 			os.Exit(1)
 		}
 	}
 
-	fmt.Println("\n================================")
+	log.Println("\n================================")
 	logInfo("All validations passed successfully!")
 }
 
