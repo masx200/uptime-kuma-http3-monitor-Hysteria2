@@ -226,7 +226,8 @@ ps aux | grep sing-box
 
 ### 问题背景
 
-许多 VPS 提供商不提供 IPv6 地址，或者 IPv6 网络不稳定，这限制了对 IPv6-only 服务的访问能力。
+许多 VPS 提供商不提供 IPv6 地址，或者 IPv6 网络不稳定，这限制了对 IPv6-only
+服务的访问能力。
 
 ### 解决方案架构
 
@@ -250,13 +251,15 @@ graph LR
 
 ### WARP 代理工作原理
 
-1. **masque-plus 工具**: 作为 Masque 协议客户端，建立到 Cloudflare WARP 的代理连接
+1. **masque-plus 工具**: 作为 Masque 协议客户端，建立到 Cloudflare WARP
+   的代理连接
 2. **流量路由**: IPv6 流量自动通过 WARP 网络转发，无需本地 IPv6 地址
 3. **协议兼容**: 支持所有主流代理协议（TUIC、Hysteria2、Reality）
 
 ### WARP 配置详情
 
 **连接参数**:
+
 - **目标服务器**: `162.159.198.2:443` (Cloudflare WARP)
 - **协议**: Masque over HTTP/3
 - **认证**: 内置 WARP 凭据

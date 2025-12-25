@@ -10,7 +10,9 @@
 
 ### 概述
 
-`h3_monitor` 是一个持续监控 HTTP/3 端点健康状态的工具，它可以将检测结果实时推送到 Uptime Kuma 监控系统。该工具支持同时监控多个端点，并提供详细的错误报告和响应时间测量。
+`h3_monitor` 是一个持续监控 HTTP/3
+端点健康状态的工具，它可以将检测结果实时推送到 Uptime Kuma
+监控系统。该工具支持同时监控多个端点，并提供详细的错误报告和响应时间测量。
 
 ### 主要特性
 
@@ -61,6 +63,7 @@ GOOS=darwin GOARCH=amd64 go build -o h3_monitor-darwin-amd64 h3_fingerprint.go
 ```
 
 **参数说明：**
+
 - `--target`: HTTP/3 端点的 URL（必需）
 - `--sni`: TLS SNI 服务器名称（必需）
 - `--push-token`: Uptime Kuma 推送令牌（必需）
@@ -106,26 +109,28 @@ GOOS=darwin GOARCH=amd64 go build -o h3_monitor-darwin-amd64 h3_fingerprint.go
 工具将向 Uptime Kuma 发送以下格式的请求：
 
 **成功状态：**
+
 ```
 GET /api/push/YOUR_TOKEN?status=up&ping=245&msg=OK
 ```
 
 **失败状态：**
+
 ```
 GET /api/push/YOUR_TOKEN?status=down&msg=dial+timeout%3A+no+connection+established
 ```
 
 ### 命令行参数
 
-| 参数 | 类型 | 必需 | 默认值 | 描述 |
-|------|------|------|--------|------|
-| `--target` | URL | 是 | 无 | HTTP/3 端点 URL（可多次指定） |
-| `--sni` | 字符串 | 是 | 无 | TLS SNI 服务器名称（可多次指定） |
-| `--push-token` | 字符串 | 是* | 无 | Uptime Kuma 推送令牌（可多次指定） |
-| `--kuma-url` | URL | 否 | http://localhost:3001 | Uptime Kuma 实例地址 |
-| `--interval` | 整数 | 否 | 60 | 监控间隔（秒） |
-| `--timeout` | 整数 | 否 | 10 | HTTP/3 连接超时（秒） |
-| `--fingerprint-only` | 布尔 | 否 | false | 仅提取证书指纹并退出 |
+| 参数                 | 类型   | 必需 | 默认值                | 描述                               |
+| -------------------- | ------ | ---- | --------------------- | ---------------------------------- |
+| `--target`           | URL    | 是   | 无                    | HTTP/3 端点 URL（可多次指定）      |
+| `--sni`              | 字符串 | 是   | 无                    | TLS SNI 服务器名称（可多次指定）   |
+| `--push-token`       | 字符串 | 是*  | 无                    | Uptime Kuma 推送令牌（可多次指定） |
+| `--kuma-url`         | URL    | 否   | http://localhost:3001 | Uptime Kuma 实例地址               |
+| `--interval`         | 整数   | 否   | 60                    | 监控间隔（秒）                     |
+| `--timeout`          | 整数   | 否   | 10                    | HTTP/3 连接超时（秒）              |
+| `--fingerprint-only` | 布尔   | 否   | false                 | 仅提取证书指纹并退出               |
 
 *注：如果不提供 `--push-token`，工具将进入指纹提取模式（向后兼容）
 
@@ -162,7 +167,7 @@ CMD ["./h3_monitor"]
 #### docker-compose.yml 示例
 
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
   h3-monitor:
     build: .
@@ -184,6 +189,7 @@ services:
 ```
 
 运行：
+
 ```bash
 docker-compose up -d
 ```
@@ -216,6 +222,7 @@ WantedBy=multi-user.target
 ```
 
 启用和启动服务：
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable h3-monitor
@@ -230,6 +237,7 @@ sudo systemctl status h3-monitor
 **原因：** Push Token 无效或对应的监控已禁用
 
 **解决方案：**
+
 1. 检查 Uptime Kuma 中监控是否处于激活状态
 2. 验证 Push Token 是否正确复制
 3. 确认监控类型为 "Push"
@@ -239,6 +247,7 @@ sudo systemctl status h3-monitor
 **原因：** 目标端点不可达或防火墙阻止
 
 **解决方案：**
+
 1. 检查网络连接：`curl -v --http3 https://target:port`
 2. 验证防火墙规则允许 UDP 流量（QUIC 使用 UDP）
 3. 增加 `--timeout` 值
@@ -248,6 +257,7 @@ sudo systemctl status h3-monitor
 **原因：** Uptime Kuma 实例不可用或网络问题
 
 **解决方案：**
+
 1. 检查 Uptime Kuma 服务状态
 2. 验证 `--kuma-url` 配置正确
 3. 查看日志中的具体错误信息
@@ -324,8 +334,10 @@ go test -tags=integration ./...
 
 ### 联系方式
 
-- 提交问题: [GitHub Issues](https://github.com/masx200/uptime-kuma-http3-monitor/issues)
-- 讨论: [GitHub Discussions](https://github.com/masx200/uptime-kuma-http3-monitor/discussions)
+- 提交问题:
+  [GitHub Issues](https://github.com/masx200/uptime-kuma-http3-monitor/issues)
+- 讨论:
+  [GitHub Discussions](https://github.com/masx200/uptime-kuma-http3-monitor/discussions)
 
 ---
 
@@ -333,17 +345,23 @@ go test -tags=integration ./...
 
 ### Overview
 
-`h3_monitor` is a continuous monitoring tool for HTTP/3 endpoints that pushes health check results to Uptime Kuma monitoring system via Push API. It supports monitoring multiple endpoints concurrently with detailed error reporting and response time measurement.
+`h3_monitor` is a continuous monitoring tool for HTTP/3 endpoints that pushes
+health check results to Uptime Kuma monitoring system via Push API. It supports
+monitoring multiple endpoints concurrently with detailed error reporting and
+response time measurement.
 
 ### Key Features
 
 - ✅ **HTTP/3 Protocol Support** - Connection testing using QUIC protocol
-- ✅ **Multi-Endpoint Monitoring** - Monitor multiple HTTP/3 targets simultaneously
+- ✅ **Multi-Endpoint Monitoring** - Monitor multiple HTTP/3 targets
+  simultaneously
 - ✅ **Uptime Kuma Integration** - Real-time status push via Push API
-- ✅ **Command-Line Configuration** - Flexible parameter configuration, no hardcoding
+- ✅ **Command-Line Configuration** - Flexible parameter configuration, no
+  hardcoding
 - ✅ **Detailed Error Reporting** - Complete error messages for debugging
 - ✅ **Response Time Measurement** - Precise millisecond-level response time
-- ✅ **Certificate Fingerprint Extraction** - Optional TLS certificate SHA256 fingerprint extraction
+- ✅ **Certificate Fingerprint Extraction** - Optional TLS certificate SHA256
+  fingerprint extraction
 - ✅ **Graceful Shutdown** - SIGINT/SIGTERM signal handling
 
 ### Requirements
@@ -384,6 +402,7 @@ GOOS=darwin GOARCH=amd64 go build -o h3_monitor-darwin-amd64 h3_fingerprint.go
 ```
 
 **Parameters:**
+
 - `--target`: HTTP/3 endpoint URL (required)
 - `--sni`: TLS SNI server name (required)
 - `--push-token`: Uptime Kuma push token (required)
@@ -401,7 +420,8 @@ GOOS=darwin GOARCH=amd64 go build -o h3_monitor-darwin-amd64 h3_fingerprint.go
   --interval 60
 ```
 
-**Note:** If fewer push tokens are provided than endpoints, the last token will be reused.
+**Note:** If fewer push tokens are provided than endpoints, the last token will
+be reused.
 
 #### 3. Certificate Fingerprint Only (Backward Compatible)
 
@@ -412,7 +432,8 @@ GOOS=darwin GOARCH=amd64 go build -o h3_monitor-darwin-amd64 h3_fingerprint.go
   --sni example.com
 ```
 
-This mode runs once and exits, outputting the certificate SHA256 fingerprint, maintaining compatibility with the original tool.
+This mode runs once and exits, outputting the certificate SHA256 fingerprint,
+maintaining compatibility with the original tool.
 
 ### Uptime Kuma Configuration
 
@@ -429,32 +450,36 @@ This mode runs once and exits, outputting the certificate SHA256 fingerprint, ma
 The tool sends requests to Uptime Kuma in the following format:
 
 **Success status:**
+
 ```
 GET /api/push/YOUR_TOKEN?status=up&ping=245&msg=OK
 ```
 
 **Failure status:**
+
 ```
 GET /api/push/YOUR_TOKEN?status=down&msg=dial+timeout%3A+no+connection+established
 ```
 
 ### Command-Line Parameters
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `--target` | URL | Yes | None | HTTP/3 endpoint URL (can be specified multiple times) |
-| `--sni` | String | Yes | None | TLS SNI server name (can be specified multiple times) |
-| `--push-token` | String | Yes* | None | Uptime Kuma push token (can be specified multiple times) |
-| `--kuma-url` | URL | No | http://localhost:3001 | Uptime Kuma instance URL |
-| `--interval` | Integer | No | 60 | Monitoring interval (seconds) |
-| `--timeout` | Integer | No | 10 | HTTP/3 connection timeout (seconds) |
-| `--fingerprint-only` | Boolean | No | false | Extract certificate fingerprint only and exit |
+| Parameter            | Type    | Required | Default               | Description                                              |
+| -------------------- | ------- | -------- | --------------------- | -------------------------------------------------------- |
+| `--target`           | URL     | Yes      | None                  | HTTP/3 endpoint URL (can be specified multiple times)    |
+| `--sni`              | String  | Yes      | None                  | TLS SNI server name (can be specified multiple times)    |
+| `--push-token`       | String  | Yes*     | None                  | Uptime Kuma push token (can be specified multiple times) |
+| `--kuma-url`         | URL     | No       | http://localhost:3001 | Uptime Kuma instance URL                                 |
+| `--interval`         | Integer | No       | 60                    | Monitoring interval (seconds)                            |
+| `--timeout`          | Integer | No       | 10                    | HTTP/3 connection timeout (seconds)                      |
+| `--fingerprint-only` | Boolean | No       | false                 | Extract certificate fingerprint only and exit            |
 
-*Note: If `--push-token` is not provided, the tool enters fingerprint extraction mode (backward compatible)
+*Note: If `--push-token` is not provided, the tool enters fingerprint extraction
+mode (backward compatible)
 
 ### Log Output
 
-The tool uses structured log format with timestamps, log levels, and detailed information:
+The tool uses structured log format with timestamps, log levels, and detailed
+information:
 
 ```
 2025-12-25T10:00:00Z [INFO] Starting HTTP/3 monitoring service (interval=60s, timeout=10s)
@@ -485,7 +510,7 @@ CMD ["./h3_monitor"]
 #### docker-compose.yml Example
 
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
   h3-monitor:
     build: .
@@ -507,6 +532,7 @@ services:
 ```
 
 Run:
+
 ```bash
 docker-compose up -d
 ```
@@ -539,6 +565,7 @@ WantedBy=multi-user.target
 ```
 
 Enable and start service:
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable h3-monitor
@@ -553,6 +580,7 @@ sudo systemctl status h3-monitor
 **Cause:** Push Token is invalid or the corresponding monitor is disabled
 
 **Solutions:**
+
 1. Check if the monitor is active in Uptime Kuma
 2. Verify the Push Token is copied correctly
 3. Confirm the monitor type is "Push"
@@ -562,6 +590,7 @@ sudo systemctl status h3-monitor
 **Cause:** Target endpoint unreachable or firewall blocking
 
 **Solutions:**
+
 1. Check network connectivity: `curl -v --http3 https://target:port`
 2. Verify firewall rules allow UDP traffic (QUIC uses UDP)
 3. Increase `--timeout` value
@@ -571,6 +600,7 @@ sudo systemctl status h3-monitor
 **Cause:** Uptime Kuma instance unavailable or network issues
 
 **Solutions:**
+
 1. Check Uptime Kuma service status
 2. Verify `--kuma-url` is configured correctly
 3. Check specific error messages in logs
@@ -580,7 +610,8 @@ sudo systemctl status h3-monitor
 - **Memory Usage**: ~50MB base + ~5MB per endpoint
 - **CPU Usage**: Minimal when idle, peaks during connection establishment
 - **Network Traffic**: ~2-5KB per endpoint per check
-- **Recommended**: Monitor maximum 10 endpoints, interval not less than 10 seconds
+- **Recommended**: Monitor maximum 10 endpoints, interval not less than 10
+  seconds
 
 ### Security Recommendations
 
@@ -628,18 +659,25 @@ Issues and Pull Requests are welcome!
 
 ### License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
+details
 
 ### Acknowledgments
 
-- [quic-go](https://github.com/quic-go/quic-go) - Go implementation of QUIC protocol
-- [Uptime Kuma](https://github.com/louislam/uptime-kuma) - Excellent self-hosted monitoring tool
+- [quic-go](https://github.com/quic-go/quic-go) - Go implementation of QUIC
+  protocol
+- [Uptime Kuma](https://github.com/louislam/uptime-kuma) - Excellent self-hosted
+  monitoring tool
 
 ### Contact
 
-- Report issues: [GitHub Issues](https://github.com/masx200/uptime-kuma-http3-monitor/issues)
-- Discussions: [GitHub Discussions](https://github.com/masx200/uptime-kuma-http3-monitor/discussions)
+- Report issues:
+  [GitHub Issues](https://github.com/masx200/uptime-kuma-http3-monitor/issues)
+- Discussions:
+  [GitHub Discussions](https://github.com/masx200/uptime-kuma-http3-monitor/discussions)
 
 ---
 
-**Note:** This is the monitoring tool based on the proposal in [openspec/changes/add-uptime-kuma-http3-monitor/](openspec/changes/add-uptime-kuma-http3-monitor/). For implementation details, see the design document and task list.
+**Note:** This is the monitoring tool based on the proposal in
+[openspec/changes/add-uptime-kuma-http3-monitor/](openspec/changes/add-uptime-kuma-http3-monitor/).
+For implementation details, see the design document and task list.

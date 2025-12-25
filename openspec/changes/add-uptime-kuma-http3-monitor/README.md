@@ -2,21 +2,26 @@
 
 ## Change ID: `add-uptime-kuma-http3-monitor`
 
-**Status**: ✅ Validated and Ready for Review
-**Validation**: `openspec validate add-uptime-kuma-http3-monitor --strict` ✓ PASSED
+**Status**: ✅ Validated and Ready for Review **Validation**:
+`openspec validate add-uptime-kuma-http3-monitor --strict` ✓ PASSED
 
 ## Quick Overview
 
-This proposal transforms the existing `h3_fingerprint.go` utility from a one-time certificate fingerprint extraction tool into a continuous HTTP/3 monitoring service that pushes status updates to Uptime Kuma.
+This proposal transforms the existing `h3_fingerprint.go` utility from a
+one-time certificate fingerprint extraction tool into a continuous HTTP/3
+monitoring service that pushes status updates to Uptime Kuma.
 
 ## Key Features
 
-1. **Continuous HTTP/3 Monitoring** - Periodic health checks with configurable intervals
-2. **Uptime Kuma Integration** - Push status updates via `/api/push/<pushToken>` endpoint
+1. **Continuous HTTP/3 Monitoring** - Periodic health checks with configurable
+   intervals
+2. **Uptime Kuma Integration** - Push status updates via `/api/push/<pushToken>`
+   endpoint
 3. **Multi-Endpoint Support** - Monitor multiple HTTP/3 targets concurrently
 4. **Command-Line Configuration** - All settings via flags (no hardcoded values)
 5. **Detailed Error Reporting** - Include error messages in push notifications
-6. **Backward Compatibility** - Preserve original fingerprint mode via `--fingerprint-only`
+6. **Backward Compatibility** - Preserve original fingerprint mode via
+   `--fingerprint-only`
 
 ## Proposal Structure
 
@@ -35,6 +40,7 @@ openspec/changes/add-uptime-kuma-http3-monitor/
 ## User Requirements (From Clarification Questions)
 
 Based on user input during proposal creation:
+
 - **Configuration Method**: Command-line parameters (flags)
 - **Operating Mode**: Scheduled/periodic monitoring loop (not one-shot)
 - **Failure Handling**: Include detailed error information in status pushes
@@ -45,12 +51,14 @@ Based on user input during proposal creation:
 ### 1. HTTP/3 Monitoring ([specs/http3-monitoring/spec.md](specs/http3-monitoring/spec.md))
 
 **Requirements:**
+
 - Periodic HTTP/3 health checks with configurable intervals
 - Multi-endpoint concurrent monitoring
 - Configurable monitoring parameters (interval, timeout)
 - Graceful shutdown on termination signals
 
 **Example Scenario:**
+
 ```gherkin
 Given a monitoring service is configured with an HTTP/3 endpoint target
 And the monitoring interval is set to 60 seconds
@@ -62,6 +70,7 @@ And the service reports the endpoint as healthy with response time
 ### 2. Push Integration ([specs/push-integration/spec.md](specs/push-integration/spec.md))
 
 **Requirements:**
+
 - Push API integration with Uptime Kuma `/api/push/<pushToken>` endpoint
 - Per-endpoint push token configuration
 - Correct parameter construction (status, msg, ping)
@@ -69,6 +78,7 @@ And the service reports the endpoint as healthy with response time
 - Comprehensive error logging and retry logic
 
 **Example Scenario:**
+
 ```gherkin
 Given an HTTP/3 health check completes successfully
 And the response time is 245ms
@@ -81,6 +91,7 @@ And the service logs the successful push
 ### 3. Command-Line Interface ([specs/command-line-interface/spec.md](specs/command-line-interface/spec.md))
 
 **Requirements:**
+
 - Command-line flag parsing (no hardcoded values)
 - Optional configuration flags with sensible defaults
 - Backward compatibility mode (`--fingerprint-only`)
@@ -88,6 +99,7 @@ And the service logs the successful push
 - URL validation for targets and Uptime Kuma endpoint
 
 **Example Usage:**
+
 ```bash
 # Single endpoint monitoring
 ./h3_monitor \
@@ -110,11 +122,14 @@ And the service logs the successful push
 
 ## Implementation Plan
 
-**Phases**: 9 (Foundation → HTTP/3 Client → Push Client → Monitoring Controller → Backward Compatibility → Logging → Documentation → Testing → Build)
+**Phases**: 9 (Foundation → HTTP/3 Client → Push Client → Monitoring Controller
+→ Backward Compatibility → Logging → Documentation → Testing → Build)
 
-**Estimated Time**: 9-13 hours (single developer) or 4-6 hours (with parallelization)
+**Estimated Time**: 9-13 hours (single developer) or 4-6 hours (with
+parallelization)
 
 **Key Tasks**:
+
 1. CLI flag parsing and validation
 2. Extract HTTP/3 check logic into reusable function
 3. Implement Uptime Kuma push client with retry logic
@@ -132,6 +147,7 @@ See [tasks.md](tasks.md) for complete task breakdown with dependencies.
 From [design.md](design.md):
 
 **Component Structure:**
+
 ```
 CLI Entry Point → Monitor Service Controller → Endpoint Monitors (goroutines)
                                                      ↓
@@ -144,6 +160,7 @@ CLI Entry Point → Monitor Service Controller → Endpoint Monitors (goroutines
 ```
 
 **Technical Decisions:**
+
 - Concurrent monitoring (one goroutine per endpoint)
 - New HTTP/3 connection per check (realistic simulation)
 - Blocking push with separate timeout (5s)
@@ -152,16 +169,17 @@ CLI Entry Point → Monitor Service Controller → Endpoint Monitors (goroutines
 
 ## Risk Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| Uptime Kuma unavailable | Buffer last status, retry with backoff |
-| Certificate changes | Log fingerprint changes, continue monitoring |
-| Memory leaks in long-running process | Connection pooling, periodic testing |
-| Too frequent polling | Default 60s interval, document best practices |
+| Risk                                 | Mitigation                                    |
+| ------------------------------------ | --------------------------------------------- |
+| Uptime Kuma unavailable              | Buffer last status, retry with backoff        |
+| Certificate changes                  | Log fingerprint changes, continue monitoring  |
+| Memory leaks in long-running process | Connection pooling, periodic testing          |
+| Too frequent polling                 | Default 60s interval, document best practices |
 
 ## Success Criteria
 
-1. ✓ Service runs continuously and performs HTTP/3 checks at configured intervals
+1. ✓ Service runs continuously and performs HTTP/3 checks at configured
+   intervals
 2. ✓ Successful connections push `status=up` with response time to Uptime Kuma
 3. ✓ Failed connections push `status=down` with error message
 4. ✓ Multiple endpoints monitored independently with individual tokens
@@ -178,8 +196,10 @@ CLI Entry Point → Monitor Service Controller → Endpoint Monitors (goroutines
 4. **Spec Review**: Review all three [specs/](specs/) for requirements
 5. **Approval**: Approve proposal to begin implementation
 6. **Implementation**: Execute tasks sequentially from [tasks.md](tasks.md)
-7. **Validation**: Run `openspec validate add-uptime-kuma-http3-monitor --strict` after changes
-8. **Archive**: After deployment, run `openspec archive add-uptime-kuma-http3-monitor`
+7. **Validation**: Run
+   `openspec validate add-uptime-kuma-http3-monitor --strict` after changes
+8. **Archive**: After deployment, run
+   `openspec archive add-uptime-kuma-http3-monitor`
 
 ## Validation Command
 
@@ -202,13 +222,18 @@ openspec list --specs
 - [proposal.md](proposal.md) - Why, what, impact
 - [design.md](design.md) - Technical decisions and architecture
 - [tasks.md](tasks.md) - Implementation checklist
-- [specs/http3-monitoring/spec.md](specs/http3-monitoring/spec.md) - HTTP/3 health check requirements
-- [specs/push-integration/spec.md](specs/push-integration/spec.md) - Uptime Kuma push API requirements
-- [specs/command-line-interface/spec.md](specs/command-line-interface/spec.md) - CLI configuration requirements
+- [specs/http3-monitoring/spec.md](specs/http3-monitoring/spec.md) - HTTP/3
+  health check requirements
+- [specs/push-integration/spec.md](specs/push-integration/spec.md) - Uptime Kuma
+  push API requirements
+- [specs/command-line-interface/spec.md](specs/command-line-interface/spec.md) -
+  CLI configuration requirements
 
 ## Questions?
 
 Refer to:
+
 - [openspec/AGENTS.md](../../AGENTS.md) - OpenSpec usage instructions
 - [openspec/project.md](../../project.md) - Project conventions
-- Original issue: Transform `h3_fingerprint.go` into Uptime Kuma HTTP/3 monitoring service
+- Original issue: Transform `h3_fingerprint.go` into Uptime Kuma HTTP/3
+  monitoring service
