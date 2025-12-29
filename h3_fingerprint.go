@@ -346,6 +346,7 @@ func CheckHTTP3(target, sni, host, method, expectedFingerprint string, expectedS
 	roundTripper := &http3.Transport{
 		TLSClientConfig: tlsConfig,
 	}
+	defer roundTripper.Close()
 
 	// Create HTTP client
 	client := &http.Client{
