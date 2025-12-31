@@ -321,169 +321,205 @@ func runFingerprintOnly(config *Config) {
 
 // Check HTTP/3 endpoint
 func CheckHTTP3(target, sni, host, method, expectedFingerprint string, expectedStatus int, timeout time.Duration) (*CheckResult, error) {
-	startTime := time.Now()
+	maxRetries := 3
+	var lastErr error
 
 	logInfo("Initializing HTTP/3 connection to %s", target)
 	logInfo("HTTP Configuration:")
 	logInfo("  - Method: %s", method)
 	logInfo("  - SNI: %s", sni)
 	logInfo("  - InsecureSkipVerify: true")
+	logInfo("  - Max retries: %d", maxRetries)
 	if host != "" {
 		logInfo("  - Host header: %s", host)
 	}
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// Create TLS config
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
-		ServerName:         sni,
-	}
-
-	// Create HTTP/3 transport
-	roundTripper := &http3.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-	defer roundTripper.Close()
-
-	// Create HTTP client
-	client := &http.Client{
-		Transport: roundTripper,
-	}
-
-	logInfo("Creating HTTP %s request...", method)
-
-	// Create HTTP request with specified method
-	req, err := http.NewRequestWithContext(ctx, method, target, nil)
-	if err != nil {
-		logError("Failed to create HTTP request: %v", err)
-		return &CheckResult{
-			Success:            false,
-			ExpectedHTTPStatus: expectedStatus,
-			ErrorMsg:           fmt.Sprintf("request creation failed: %v", err),
-		}, err
-	}
-
-	// Set Host header if provided
-	if host != "" {
-		req.Host = host
-		logInfo("Setting Host header: %s", host)
-	}
-
-	logInfo("Sending HTTP/3 %s request...", method)
-
-	// Execute request
-	resp, err := client.Do(req)
-	if err != nil {
-		logError("HTTP/3 request failed: %v", err)
-		return &CheckResult{
-			Success:            false,
-			ExpectedHTTPStatus: expectedStatus,
-			ErrorMsg:           fmt.Sprintf("connection failed: %v", err),
-		}, err
-	}
-	defer resp.Body.Close()
-
-	// Calculate response time
-	responseTime := time.Since(startTime)
-	logInfo("Response received in %d ms", responseTime.Milliseconds())
-
-	// Get TLS state
-	tlsState := resp.TLS
-	if tlsState == nil {
-		logError("Unable to retrieve TLS connection state")
-		return &CheckResult{
-			Success:            false,
-			ExpectedHTTPStatus: expectedStatus,
-			ErrorMsg:           "unable to get TLS connection state",
-		}, fmt.Errorf("no TLS state")
-	}
-
-	logInfo("TLS connection established successfully")
-	logInfo("TLS Version: %d", tlsState.Version)
-	logInfo("TLS Cipher Suite: %x", tlsState.CipherSuite)
-
-	// Get certificate
-	if len(tlsState.PeerCertificates) == 0 {
-		logError("Server provided no certificates")
-		return &CheckResult{
-			Success:            false,
-			ExpectedHTTPStatus: expectedStatus,
-			ErrorMsg:           "server provided no certificates",
-		}, fmt.Errorf("no certificates")
-	}
-
-	serverCert := tlsState.PeerCertificates[0]
-	logInfo("Certificate information:")
-	logInfo("  - Subject: %s", serverCert.Subject)
-	logInfo("  - Issuer: %s", serverCert.Issuer)
-	logInfo("  - NotBefore: %s", serverCert.NotBefore.Format(time.RFC3339))
-	logInfo("  - NotAfter: %s", serverCert.NotAfter.Format(time.RFC3339))
-
-	// Calculate certificate fingerprint
-	var fingerprint [32]byte = sha256.Sum256(serverCert.Raw)
-	fingerprintStr := fmt.Sprintf("%x", fingerprint)
-
-	logInfo("Certificate SHA256 fingerprint: %s", fingerprintStr)
-	logInfo("HTTP Status Code: %d", resp.StatusCode)
-
-	// Validate fingerprint if provided
-	if expectedFingerprint != "" {
-		logInfo("Validating certificate fingerprint...")
-		// Normalize both fingerprints for comparison (remove any whitespace/colons)
-		expectedNormalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(expectedFingerprint, ":", ""), " ", ""))
-		actualNormalized := strings.ToLower(strings.ReplaceAll(fingerprintStr, " ", ""))
-
-		if expectedNormalized != actualNormalized {
-			logError("Certificate fingerprint mismatch!")
-			logError("  Expected: %s", expectedFingerprint)
-			logError("  Got: %s", fingerprintStr)
-			return &CheckResult{
-				Success:             false,
-				ResponseTime:        responseTime,
-				CertFingerprint:     fingerprintStr,
-				ExpectedFingerprint: expectedFingerprint,
-				HTTPStatusCode:      resp.StatusCode,
-				ExpectedHTTPStatus:  expectedStatus,
-				ErrorMsg:            fmt.Sprintf("certificate fingerprint mismatch: expected %s, got %s", expectedFingerprint, fingerprintStr),
-			}, fmt.Errorf("fingerprint mismatch")
+	// Retry loop for HTTP/3 connection
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt > 1 {
+			logWarn("Retry attempt %d/%d after connection error...", attempt, maxRetries)
 		}
-		logInfo("Certificate fingerprint validation: PASSED")
-	}
 
-	// Validate HTTP status code if expected status is set
-	if expectedStatus > 0 {
-		logInfo("Validating HTTP status code...")
-		if resp.StatusCode != expectedStatus {
-			logError("HTTP status code mismatch!")
-			logError("  Expected: %d", expectedStatus)
-			logError("  Got: %d", resp.StatusCode)
-			return &CheckResult{
-				Success:             false,
-				ResponseTime:        responseTime,
-				CertFingerprint:     fingerprintStr,
-				ExpectedFingerprint: expectedFingerprint,
-				HTTPStatusCode:      resp.StatusCode,
-				ExpectedHTTPStatus:  expectedStatus,
-				ErrorMsg:            fmt.Sprintf("HTTP status code mismatch: expected %d, got %d", expectedStatus, resp.StatusCode),
-			}, fmt.Errorf("status code mismatch")
+		startTime := time.Now()
+
+		// Create context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+
+		// Create TLS config
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+			ServerName:         sni,
 		}
-		logInfo("HTTP status code validation: PASSED (expected %d, got %d)", expectedStatus, resp.StatusCode)
+
+		// Create HTTP/3 transport
+		roundTripper := &http3.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+
+		// Create HTTP client
+		client := &http.Client{
+			Transport: roundTripper,
+		}
+
+		logInfo("Creating HTTP %s request...", method)
+
+		// Create HTTP request with specified method
+		req, err := http.NewRequestWithContext(ctx, method, target, nil)
+		if err != nil {
+			logError("Failed to create HTTP request: %v", err)
+			cancel()
+			roundTripper.Close()
+			lastErr = err
+			if attempt < maxRetries {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return &CheckResult{
+				Success:            false,
+				ExpectedHTTPStatus: expectedStatus,
+				ErrorMsg:           fmt.Sprintf("request creation failed: %v", err),
+			}, err
+		}
+
+		// Set Host header if provided
+		if host != "" {
+			req.Host = host
+			if attempt == 1 {
+				logInfo("Setting Host header: %s", host)
+			}
+		}
+
+		logInfo("Sending HTTP/3 %s request...", method)
+
+		// Execute request
+		resp, err := client.Do(req)
+		if err != nil {
+			logError("HTTP/3 request failed: %v", err)
+			cancel()
+			roundTripper.Close()
+			lastErr = err
+			if attempt < maxRetries {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return &CheckResult{
+				Success:            false,
+				ExpectedHTTPStatus: expectedStatus,
+				ErrorMsg:           fmt.Sprintf("connection failed after %d attempts: %v", maxRetries, err),
+			}, err
+		}
+
+		// Success - continue processing
+		defer roundTripper.Close()
+		defer resp.Body.Close()
+		cancel()
+
+		// Calculate response time
+		responseTime := time.Since(startTime)
+		logInfo("Response received in %d ms", responseTime.Milliseconds())
+
+		// Get TLS state
+		tlsState := resp.TLS
+		if tlsState == nil {
+			logError("Unable to retrieve TLS connection state")
+			return &CheckResult{
+				Success:            false,
+				ExpectedHTTPStatus: expectedStatus,
+				ErrorMsg:           "unable to get TLS connection state",
+			}, fmt.Errorf("no TLS state")
+		}
+
+		logInfo("TLS connection established successfully")
+		logInfo("TLS Version: %d", tlsState.Version)
+		logInfo("TLS Cipher Suite: %x", tlsState.CipherSuite)
+
+		// Get certificate
+		if len(tlsState.PeerCertificates) == 0 {
+			logError("Server provided no certificates")
+			return &CheckResult{
+				Success:            false,
+				ExpectedHTTPStatus: expectedStatus,
+				ErrorMsg:           "server provided no certificates",
+			}, fmt.Errorf("no certificates")
+		}
+
+		serverCert := tlsState.PeerCertificates[0]
+		logInfo("Certificate information:")
+		logInfo("  - Subject: %s", serverCert.Subject)
+		logInfo("  - Issuer: %s", serverCert.Issuer)
+		logInfo("  - NotBefore: %s", serverCert.NotBefore.Format(time.RFC3339))
+		logInfo("  - NotAfter: %s", serverCert.NotAfter.Format(time.RFC3339))
+
+		// Calculate certificate fingerprint
+		var fingerprint [32]byte = sha256.Sum256(serverCert.Raw)
+		fingerprintStr := fmt.Sprintf("%x", fingerprint)
+
+		logInfo("Certificate SHA256 fingerprint: %s", fingerprintStr)
+		logInfo("HTTP Status Code: %d", resp.StatusCode)
+
+		// Validate fingerprint if provided
+		if expectedFingerprint != "" {
+			logInfo("Validating certificate fingerprint...")
+			// Normalize both fingerprints for comparison (remove any whitespace/colons)
+			expectedNormalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(expectedFingerprint, ":", ""), " ", ""))
+			actualNormalized := strings.ToLower(strings.ReplaceAll(fingerprintStr, " ", ""))
+
+			if expectedNormalized != actualNormalized {
+				logError("Certificate fingerprint mismatch!")
+				logError("  Expected: %s", expectedFingerprint)
+				logError("  Got: %s", fingerprintStr)
+				return &CheckResult{
+					Success:             false,
+					ResponseTime:        responseTime,
+					CertFingerprint:     fingerprintStr,
+					ExpectedFingerprint: expectedFingerprint,
+					HTTPStatusCode:      resp.StatusCode,
+					ExpectedHTTPStatus:  expectedStatus,
+					ErrorMsg:            fmt.Sprintf("certificate fingerprint mismatch: expected %s, got %s", expectedFingerprint, fingerprintStr),
+				}, fmt.Errorf("fingerprint mismatch")
+			}
+			logInfo("Certificate fingerprint validation: PASSED")
+		}
+
+		// Validate HTTP status code if expected status is set
+		if expectedStatus > 0 {
+			logInfo("Validating HTTP status code...")
+			if resp.StatusCode != expectedStatus {
+				logError("HTTP status code mismatch!")
+				logError("  Expected: %d", expectedStatus)
+				logError("  Got: %d", resp.StatusCode)
+				return &CheckResult{
+					Success:             false,
+					ResponseTime:        responseTime,
+					CertFingerprint:     fingerprintStr,
+					ExpectedFingerprint: expectedFingerprint,
+					HTTPStatusCode:      resp.StatusCode,
+					ExpectedHTTPStatus:  expectedStatus,
+					ErrorMsg:            fmt.Sprintf("HTTP status code mismatch: expected %d, got %d", expectedStatus, resp.StatusCode),
+				}, fmt.Errorf("status code mismatch")
+			}
+			logInfo("HTTP status code validation: PASSED (expected %d, got %d)", expectedStatus, resp.StatusCode)
+		}
+
+		logInfo("Connection test completed successfully")
+
+		return &CheckResult{
+			Success:             true,
+			ResponseTime:        responseTime,
+			CertFingerprint:     fingerprintStr,
+			ExpectedFingerprint: expectedFingerprint,
+			HTTPStatusCode:      resp.StatusCode,
+			ExpectedHTTPStatus:  expectedStatus,
+			ErrorMsg:            "OK",
+		}, nil
 	}
 
-	logInfo("Connection test completed successfully")
-
+	// If we get here, all retries failed
 	return &CheckResult{
-		Success:             true,
-		ResponseTime:        responseTime,
-		CertFingerprint:     fingerprintStr,
-		ExpectedFingerprint: expectedFingerprint,
-		HTTPStatusCode:      resp.StatusCode,
-		ExpectedHTTPStatus:  expectedStatus,
-		ErrorMsg:            "OK",
-	}, nil
+		Success:            false,
+		ExpectedHTTPStatus: expectedStatus,
+		ErrorMsg:           fmt.Sprintf("connection failed after %d attempts: %v", maxRetries, lastErr),
+	}, lastErr
 }
 
 // Push status to Uptime Kuma
@@ -685,17 +721,22 @@ func checkAndPush(endpoint EndpointConfig, timeout time.Duration) {
 		logInfo("  - Message: %s", result.ErrorMsg)
 	}
 
+	maxRetries := 3
 	pushErr := PushStatus(endpoint.KumaURL, endpoint.PushToken, result, endpoint.Name)
 	if pushErr != nil {
 		if strings.Contains(pushErr.Error(), "server error") {
-			// Retry once on 5xx errors
-			logWarn("Push failed (server error), retrying in 1 second...")
-			time.Sleep(1 * time.Second)
-			pushErr = PushStatus(endpoint.KumaURL, endpoint.PushToken, result, endpoint.Name)
-			if pushErr != nil {
-				logError("Push retry failed: %v", pushErr)
-			} else {
-				logInfo("Push succeeded on retry")
+			// Retry up to 3 times on 5xx errors
+			for retry := 1; retry <= maxRetries; retry++ {
+				logWarn("Push failed (server error), retry attempt %d/%d in 1 second...", retry, maxRetries)
+				time.Sleep(1 * time.Second)
+				pushErr = PushStatus(endpoint.KumaURL, endpoint.PushToken, result, endpoint.Name)
+				if pushErr == nil {
+					logInfo("Push succeeded on retry attempt %d", retry)
+					break
+				}
+				if retry == maxRetries {
+					logError("Push failed after %d retry attempts: %v", maxRetries, pushErr)
+				}
 			}
 		} else if strings.Contains(pushErr.Error(), "not found") {
 			logError("Push failed: %s", pushErr)
