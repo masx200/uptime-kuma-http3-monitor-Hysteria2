@@ -4,3 +4,5 @@ node_modules
 h3_monitor.exe
 *.log
 server.log
+h3_monitor
+/.workbuddy

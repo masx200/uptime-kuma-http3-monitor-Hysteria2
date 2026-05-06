@@ -64,12 +64,17 @@ GOOS=darwin GOARCH=amd64 go build -o h3_monitor-darwin-amd64 h3_fingerprint.go
 
 **参数说明：**
 
-- `--target`: HTTP/3 端点的 URL（必需）
-- `--sni`: TLS SNI 服务器名称（必需）
-- `--push-token`: Uptime Kuma 推送令牌（必需）
+- `--target`: HTTP/3 端点的 URL（必需，可多次指定）
+- `--sni`: TLS SNI 服务器名称（必需，可多次指定）
+- `--push-token`: Uptime Kuma 推送令牌（必需，可多次指定）
 - `--kuma-url`: Uptime Kuma 实例地址（默认：http://localhost:3001）
 - `--interval`: 监控间隔，单位秒（默认：60）
 - `--timeout`: 连接超时时间，单位秒（默认：10）
+- `--method`: HTTP 请求方法，如 GET、POST、HEAD 等（默认：HEAD，可多次指定）
+- `--host`: HTTP Host 请求头（可多次指定）
+- `--expected-status`: 期望的 HTTP 响应状态码，如 200、204 等（可多次指定）
+- `--fingerprint`: 期望的 TLS 证书 SHA256 指纹，必须精确匹配（可多次指定）
+- `--fingerprint-only`: 仅提取证书指纹并退出（布尔标志）
 
 #### 2. 监控多个端点
 
@@ -122,15 +127,19 @@ GET /api/push/YOUR_TOKEN?status=down&msg=dial+timeout%3A+no+connection+establish
 
 ### 命令行参数
 
-| 参数                 | 类型   | 必需 | 默认值                | 描述                               |
-| -------------------- | ------ | ---- | --------------------- | ---------------------------------- |
-| `--target`           | URL    | 是   | 无                    | HTTP/3 端点 URL（可多次指定）      |
-| `--sni`              | 字符串 | 是   | 无                    | TLS SNI 服务器名称（可多次指定）   |
-| `--push-token`       | 字符串 | 是*  | 无                    | Uptime Kuma 推送令牌（可多次指定） |
-| `--kuma-url`         | URL    | 否   | http://localhost:3001 | Uptime Kuma 实例地址               |
-| `--interval`         | 整数   | 否   | 60                    | 监控间隔（秒）                     |
-| `--timeout`          | 整数   | 否   | 10                    | HTTP/3 连接超时（秒）              |
-| `--fingerprint-only` | 布尔   | 否   | false                 | 仅提取证书指纹并退出               |
+| 参数                  | 类型   | 必需 | 默认值                | 描述                                           |
+| --------------------- | ------ | ---- | --------------------- | ---------------------------------------------- |
+| `--target`            | URL    | 是   | 无                    | HTTP/3 端点 URL（可多次指定）                  |
+| `--sni`               | 字符串 | 是   | 无                    | TLS SNI 服务器名称（可多次指定）               |
+| `--push-token`        | 字符串 | 是*  | 无                    | Uptime Kuma 推送令牌（可多次指定）             |
+| `--kuma-url`          | URL    | 否   | http://localhost:3001 | Uptime Kuma 实例地址                           |
+| `--interval`          | 整数   | 否   | 60                    | 监控间隔（秒）                                 |
+| `--timeout`           | 整数   | 否   | 10                    | HTTP/3 连接超时（秒）                          |
+| `--method`            | 字符串 | 否   | HEAD                  | HTTP 请求方法（GET、POST、HEAD 等，可多次指定）|
+| `--host`              | 字符串 | 否   | 无                    | HTTP Host 请求头（可多次指定）                 |
+| `--expected-status`   | 整数   | 否   | 无                    | 期望的 HTTP 响应状态码（可多次指定）           |
+| `--fingerprint`       | 字符串 | 否   | 无                    | 期望的 TLS 证书 SHA256 指纹（精确匹配，可多次指定）|
+| `--fingerprint-only`  | 布尔   | 否   | false                 | 仅提取证书指纹并退出                           |
 
 *注：如果不提供 `--push-token`，工具将进入指纹提取模式（向后兼容）
 
@@ -403,12 +412,17 @@ GOOS=darwin GOARCH=amd64 go build -o h3_monitor-darwin-amd64 h3_fingerprint.go
 
 **Parameters:**
 
-- `--target`: HTTP/3 endpoint URL (required)
-- `--sni`: TLS SNI server name (required)
-- `--push-token`: Uptime Kuma push token (required)
+- `--target`: HTTP/3 endpoint URL (required, can be specified multiple times)
+- `--sni`: TLS SNI server name (required, can be specified multiple times)
+- `--push-token`: Uptime Kuma push token (required, can be specified multiple times)
 - `--kuma-url`: Uptime Kuma instance URL (default: http://localhost:3001)
 - `--interval`: Monitoring interval in seconds (default: 60)
 - `--timeout`: Connection timeout in seconds (default: 10)
+- `--method`: HTTP method, e.g. GET, POST, HEAD (default: HEAD, can be specified multiple times)
+- `--host`: HTTP Host header (can be specified multiple times)
+- `--expected-status`: Expected HTTP response status code, e.g. 200, 204 (can be specified multiple times)
+- `--fingerprint`: Expected TLS certificate SHA256 fingerprint, must match exactly (can be specified multiple times)
+- `--fingerprint-only`: Extract certificate fingerprint only and exit (boolean flag)
 
 #### 2. Monitor Multiple Endpoints
 
@@ -463,15 +477,19 @@ GET /api/push/YOUR_TOKEN?status=down&msg=dial+timeout%3A+no+connection+establish
 
 ### Command-Line Parameters
 
-| Parameter            | Type    | Required | Default               | Description                                              |
-| -------------------- | ------- | -------- | --------------------- | -------------------------------------------------------- |
-| `--target`           | URL     | Yes      | None                  | HTTP/3 endpoint URL (can be specified multiple times)    |
-| `--sni`              | String  | Yes      | None                  | TLS SNI server name (can be specified multiple times)    |
-| `--push-token`       | String  | Yes*     | None                  | Uptime Kuma push token (can be specified multiple times) |
-| `--kuma-url`         | URL     | No       | http://localhost:3001 | Uptime Kuma instance URL                                 |
-| `--interval`         | Integer | No       | 60                    | Monitoring interval (seconds)                            |
-| `--timeout`          | Integer | No       | 10                    | HTTP/3 connection timeout (seconds)                      |
-| `--fingerprint-only` | Boolean | No       | false                 | Extract certificate fingerprint only and exit            |
+| Parameter             | Type    | Required | Default               | Description                                                        |
+| --------------------- | ------- | -------- | --------------------- | ------------------------------------------------------------------ |
+| `--target`            | URL     | Yes      | None                  | HTTP/3 endpoint URL (can be specified multiple times)              |
+| `--sni`               | String  | Yes      | None                  | TLS SNI server name (can be specified multiple times)              |
+| `--push-token`        | String  | Yes*     | None                  | Uptime Kuma push token (can be specified multiple times)           |
+| `--kuma-url`          | URL     | No       | http://localhost:3001 | Uptime Kuma instance URL                                           |
+| `--interval`          | Integer | No       | 60                    | Monitoring interval (seconds)                                      |
+| `--timeout`           | Integer | No       | 10                    | HTTP/3 connection timeout (seconds)                                |
+| `--method`            | String  | No       | HEAD                  | HTTP method (GET, POST, HEAD, etc.) (can be specified multiple times) |
+| `--host`              | String  | No       | None                  | HTTP Host header (can be specified multiple times)                 |
+| `--expected-status`   | Integer | No       | None                  | Expected HTTP status code (e.g. 200, 204) (can be specified multiple times) |
+| `--fingerprint`       | String  | No       | None                  | Expected TLS certificate SHA256 fingerprint, must match exactly (can be specified multiple times) |
+| `--fingerprint-only`  | Boolean | No       | false                 | Extract certificate fingerprint only and exit                      |
 
 *Note: If `--push-token` is not provided, the tool enters fingerprint extraction
 mode (backward compatible)
